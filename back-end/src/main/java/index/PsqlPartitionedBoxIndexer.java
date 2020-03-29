@@ -18,7 +18,7 @@ import project.Transform;
 public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
 
     private static PsqlPartitionedBoxIndexer instance = null;
-    private static final int NUM_PARTITIONS = 100;
+    private static final int NUM_PARTITIONS = 50;
 
     private PsqlPartitionedBoxIndexer() {}
 
@@ -44,50 +44,43 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
 
         // step 0: create tables for storing bboxes and tiles
         // put all canvases and layers in same table
-        String bboxTableName = "bbox_" + Main.getProject().getName();
-
-        // create extension if it doesn't exist
-        String extSql = "create extension if not exists btree_gist;";
-        bboxStmt.executeUpdate(extSql);
+        String bboxTableName = "bbox_" + Main.getProject().getName() + "_" + c.getId() + "layer" + layerId;
 
         // drop table if exists -- NO DON'T WANT TO DROP TABLE NOW ONE BIG TABLE
         // String sql = "drop table if exists " + bboxTableName + ";";
         // bboxStmt.executeUpdate(sql);
 
+        // create the bbox table
         String sql = "";
-        if (c.getId().equals(topCanvas.getId())) {
-            // create the bbox table
-            sql = "drop table if exists " + bboxTableName + ";";
-            bboxStmt.executeUpdate(sql);
-            sql = "CREATE UNLOGGED TABLE " + bboxTableName + " (";
-            for (int i = 0; i < colNames.size(); i++) sql += colNames.get(i) + " text, ";
-            // need to add value based on canvas id and layer id
-            sql +=
-                    "cx double precision, cy double precision, " +
-                    "minx double precision, miny double precision, " +
-                    "maxx double precision, maxy double precision, " +
-                    "geom box, canvasid int8, partition_id int) " +
-                    "PARTITION BY LIST (partition_id);";
+        sql = "drop table if exists " + bboxTableName + ";";
+        bboxStmt.executeUpdate(sql);
+        sql = "CREATE UNLOGGED TABLE " + bboxTableName + " (";
+        for (int i = 0; i < colNames.size(); i++) sql += colNames.get(i) + " text, ";
+        // need to add value based on canvas id and layer id
+        sql +=
+                "cx double precision, cy double precision, " +
+                "minx double precision, miny double precision, " +
+                "maxx double precision, maxy double precision, " +
+                "geom box, partition_id int) " +
+                "PARTITION BY LIST (partition_id);";
+        System.out.println(sql);
+        bboxStmt.executeUpdate(sql);
+
+        // create the bbox table's partitions
+        for (int i = 0; i < NUM_PARTITIONS; i++) {
+            sql = 
+                "CREATE UNLOGGED TABLE "
+                    + bboxTableName
+                    + "_"
+                    + i
+                    + " PARTITION OF "
+                    + bboxTableName
+                    + " FOR VALUES IN ("
+                    + i
+                    + ");";
             System.out.println(sql);
             bboxStmt.executeUpdate(sql);
-
-            // create the bbox table's partitions
-            for (int i = 0; i < NUM_PARTITIONS; i++) {
-                sql = 
-                    "CREATE UNLOGGED TABLE "
-                        + bboxTableName
-                        + "_"
-                        + i
-                        + " PARTITION OF "
-                        + bboxTableName
-                        + " FOR VALUES IN ("
-                        + i
-                        + ");";
-                System.out.println(sql);
-                bboxStmt.executeUpdate(sql);
-            }
         }
-        
         
 
         // if this is an empty layer, return
@@ -107,7 +100,8 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
         for (int i = 0; i < colNames.size() + 6; i++) {
             insertSql += "?, ";
         }
-        insertSql += "?::box, ?, ?);";
+        insertSql += "?::box, ";
+        insertSql += "?);";
         PreparedStatement preparedStmt =
                 DbConnector.getPreparedStatement(Config.databaseName, insertSql);
         while (rs.next()) {
@@ -146,8 +140,6 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
             preparedStmt.setString(
                     transformedRow.size() + 7,  getBoxText(minx, miny, maxx, maxy));
 
-            preparedStmt.setInt(transformedRow.size() + 8, getCanvasNum(c));
-
             // calculate partition id -- partition width into equal sized buckets
             // each partition will include all z values in that width, so it is more 
             // of a equal size slice through the canvases, only supports one pyramid right now though
@@ -165,7 +157,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                 System.out.println("partitionId is too high, is: " + partitionId + " before correcting");
                 partitionId = NUM_PARTITIONS - 1;
             }
-            preparedStmt.setInt(transformedRow.size() + 9, partitionId);
+            preparedStmt.setInt(transformedRow.size() + 8, partitionId);
 
             
             preparedStmt.addBatch();
@@ -184,53 +176,52 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
         }
         preparedStmt.close();
 
-        // index on inserted data if the canvas is the bottom-most canvas
-        if (c.getId().equals(bottomCanvas.getId())) {
-            /*
-            sql: create index idx_tbl_box_1 on tbl_box using gist (geom);
-            */
+        
+        /*
+        sql: create index idx_tbl_box_1 on tbl_box using gist (geom);
+        */
+        sql =
+                "create index box_idx_"
+                        + bboxTableName
+                        + " on "
+                        + bboxTableName
+                        + " using gist (geom);";
+        System.out.println(sql);
+        long st = System.currentTimeMillis();
+        bboxStmt.executeUpdate(sql);
+        System.out.println(
+            "Creating spatial indexes took: "
+                + (System.currentTimeMillis() - st) / 1000.0
+                + "s.");
+
+        // CLUSTER
+        // note: postgres automatically makes child indices for the partitions 
+        // with the suffix '_geom_idx' and since CLUSTER doesn't propagate to the 
+        // child indices, we have to loop through and call it a bunch of times
+        st = System.currentTimeMillis();
+        for (int i = 0; i < NUM_PARTITIONS; i++) {
             sql =
-            "create index box_idx_"
-                    + bboxTableName
-                    + " on "
-                    + bboxTableName
-                    + " using gist (geom, canvasid);";
+                    "CLUSTER "
+                            + bboxTableName
+                            + "_"
+                            + i
+                            + " USING "
+                            + bboxTableName
+                            + "_"
+                            + i
+                            + "_geom_idx;";
             System.out.println(sql);
-            long st = System.currentTimeMillis();
+            long stt = System.currentTimeMillis();
             bboxStmt.executeUpdate(sql);
             System.out.println(
-                "Creating rtree spatial index took: "
-                    + (System.currentTimeMillis() - st) / 1000.0
-                    + "s.");
-
-            // CLUSTER
-            // note: postgres automatically makes child indices for the partitions 
-            // with the suffix '_geom_idx' and since CLUSTER doesn't propagate to the 
-            // child indices, we have to loop through and call it a bunch of times
-            st = System.currentTimeMillis();
-            for (int i = 0; i < NUM_PARTITIONS; i++) {
-                sql =
-                        "CLUSTER "
-                                + bboxTableName
-                                + "_"
-                                + i
-                                + " USING "
-                                + bboxTableName
-                                + "_"
-                                + i
-                                + "_geom_canvasid_idx;";
-                System.out.println(sql);
-                long stt = System.currentTimeMillis();
-                bboxStmt.executeUpdate(sql);
-                System.out.println(
-                        "CLUSTERing Partition #"
-                                + i
-                                + " took "
-                                + (System.currentTimeMillis() - stt) / 1000.0
-                                + "s.");
-            }
-            System.out.println("CLUSTERing in total took: " + (System.currentTimeMillis() - st) / 1000.0 + "s.");
+                    "CLUSTERing Partition #"
+                            + i
+                            + " took "
+                            + (System.currentTimeMillis() - stt) / 1000.0
+                            + "s.");
         }
+        System.out.println(
+            "CLUSTERing in total took: " + (System.currentTimeMillis() - st) / 1000.0 + "s.");
         bboxStmt.close();
     }
 
@@ -241,7 +232,6 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
 
         double minx = newBox.getMinx(), miny = newBox.getMiny();
         double maxx = newBox.getMaxx(), maxy = newBox.getMaxy();
-        int canvasNum = getCanvasNum(c);
 
         String boxNew =
                 "box (" + "point(" + minx + ", " + miny + "), " + "point(" + maxx
@@ -257,7 +247,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
 
         // get column list string
         String colListStr = c.getLayers().get(layerId).getColStr("");
-        String bboxTableName = "bbox_" + Main.getProject().getName();
+        String bboxTableName = "bbox_" + Main.getProject().getName() + "_" + c.getId() + "layer" + layerId;
 
         // find range of partition ids to search
         double partitionWidth = (double) c.getW() / NUM_PARTITIONS;
@@ -276,7 +266,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                     + i
                     + " where geom && ";
             sql += boxNew;
-            sql += " and not (geom && " + boxOld + ") and canvasid = " + canvasNum;
+            sql += " and not (geom && " + boxOld + ")";
             if (predicate.length() > 0) sql += " and " + predicate + ";";
             else sql += ";";
             System.out.println(sql);
@@ -343,16 +333,5 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                         + "))";
 
         return boxText;
-    }
-
-    private static int getCanvasNum(Canvas c) {
-
-        // get the num i for the i-th canvas
-        ArrayList<Canvas> allCanvases = Main.getProject().getCanvases();
-        for (int i = 0; i < allCanvases.size(); i++)
-            if (allCanvases.get(i).getId().equals(c.getId())) return i;
-
-        // TODO: figure out what to do if don't find a canvas
-        return 0;
     }
 }

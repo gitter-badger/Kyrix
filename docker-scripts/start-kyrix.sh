@@ -1,21 +1,23 @@
 #!/bin/bash
 
-echo "no" > /kyrix-started
+echo "no" > ~/kyrix-started
 
-source /kyrix/docker-scripts/spinner.sh
+source ~/Kyrix/docker-scripts/spinner.sh
 
 SRCDATA_PROJECT_NAME=${SRCDATA_PROJECT_NAME:-dots_skewed_80_20}
 SRCDATA_DB=${SRCDATA_DB:-dots_skewed_80_20}
 SRCDATA_DB_TEST_TABLE=${SRCDATA_DB_TEST_TABLE:-dots_skewed_80_20}  # source table (one of...) checked to avoid duplicate loads
 SRCDATA_DB_TEST_TABLE_MIN_RECS=${SRCDATA_DB_TEST_TABLE_MIN_RECS:-500000}  # rarely needs changing: min records to find in test table
-SRCDATA_DB_LOAD_CMD=${SRCDATA_DB_LOAD_CMD:-/kyrix/compiler/examples/dots-skewed-80-20/reload-dots-skewed-80-20.sh}
-KYRIX_DB_INDEX_CMD=${KYRIX_DB_INDEX_CMD:-/kyrix/compiler/examples/dots-skewed-80-20/reindex-dots-skewed-80-20.sh}
+SRCDATA_DB_LOAD_CMD=${SRCDATA_DB_LOAD_CMD:-~/Kyrix/compiler/examples/dots-skewed-80-20/reload-dots-skewed-80-20.sh}
+KYRIX_DB_INDEX_CMD=${KYRIX_DB_INDEX_CMD:-~/Kyrix/compiler/examples/dots-skewed-80-20/reindex-dots-skewed-80-20.sh}
 KYRIX_DB_INDEX_FORCE=${KYRIX_DB_INDEX_FORCE:-0}
 KYRIX_DB_RELOAD_FORCE=${KYRIX_DB_RELOAD_FORCE:-0}
 START_APP=1
 
-PGHOST=${PGHOST:-db}  # db is the default used in docker-compose.yml
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kyrixftw}
+PGHOST=${PGHOST:-localhost}  # db is the default used in docker-compose.yml
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+# USER_NAME=${USER_NAME:-kyrix}
+# USER_PASSWORD=${USER_PASSWORD:-kyrix_password}
 USER_NAME=${USER_NAME:-kyrix}
 USER_PASSWORD=${USER_PASSWORD:-kyrix_password}
 
@@ -26,15 +28,15 @@ DBTYPE=${DBTYPE:-psql}  # other option is citus
 
 KYRIX_DB=${KYRIX_DB:-kyrix}
 
-cd /kyrix
-echo $SRCDATA_PROJECT_NAME > /kyrix/config.txt
-echo "8000" >> /kyrix/config.txt
-echo $DBTYPE >> /kyrix/config.txt
-echo $PGHOST >> /kyrix/config.txt
-echo $USER_NAME >> /kyrix/config.txt
-echo $USER_PASSWORD >> /kyrix/config.txt
-echo $KYRIX_DB >> /kyrix/config.txt
-echo "/kyrix/compiler" >> /kyrix/config.txt
+cd ~/Kyrix
+echo $SRCDATA_PROJECT_NAME > ~/Kyrix/config.txt
+echo "8000" >> ~/Kyrix/config.txt
+echo $DBTYPE >> ~/Kyrix/config.txt
+echo $PGHOST >> ~/Kyrix/config.txt
+echo "postgres" >> ~/Kyrix/config.txt
+echo "" >> ~/Kyrix/config.txt
+echo $KYRIX_DB >> ~/Kyrix/config.txt
+echo "/Users/petergriggs/Kyrix/compiler" >> ~/Kyrix/config.txt
 
 IGNORE_RX="(NOTICE|HINT|already exists)"
 echo "*** setting up postgres roles/databases on master..."
@@ -75,15 +77,17 @@ if [ "x$START_APP" = "x1" ] || [ "x$SRCDATA_PROJECT_NAME" = "xnba" ]; then
 fi
 
 # starting the backend
-cd /kyrix/back-end
+cd ~/Kyrix/back-end
 
 while [ 1 ]; do KYRIX_PID=`ps awwwx | grep Slf4jMavenTransferListener | grep -v grep | head -1 | awk '{print $1}' | tr -d '\n'`; if [ "x$KYRIX_PID" == "x" ]; then break; fi; spin "backend server found - killing $KYRIX_PID..."; kill $KYRIX_PID; sleep 1; done
 
 echo "*** starting backend server..."
-cd /kyrix/back-end
+cd ~/Kyrix/back-end
 mvn -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn compile | tee mvn-compile.out >/dev/null 2>&1
 rm -f mvn-exec.out && touch mvn-exec.out
-mvn -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn exec:java -Dexec.mainClass="main.Main" | stdbuf -oL grep -v Downloading: | tee mvn-exec.out &
+# mvn -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn exec:java -Dexec.mainClass="main.Main" | stdbuf -oL grep -v Downloading: | tee mvn-exec.out &
+mvn -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn exec:java -Dexec.mainClass="main.Main" | tee mvn-exec.out &
+
 # note(asah): limited grep behavior inside alpine/busybox, but still this is awkward due to my limited shell scripting skills.
 while [ 1 ]; do if grep -E -q 'Done precomputing|Backend server started' mvn-exec.out; then break; fi; spin "waiting for backend server"; sleep 1; done
 
@@ -94,14 +98,14 @@ if [ "x$START_APP" = "x1" ]; then
 
     sql="select dirty from project where name='$SRCDATA_PROJECT_NAME';"
     echo "sql=$sql"
-    cmd="psql $PGCONN_STRING_USER/kyrix -X -P t -P format=unaligned -c \"$sql\""
+    cmd="psql $PGCONN_STRING_POSTGRES/kyrix -X -P t -P format=unaligned -c \"$sql\""
     echo "cmd=$cmd"
     while [ 1 ]; do
-        w=$(psql $PGCONN_STRING_USER/$KYRIX_DB -X -P t -P format=unaligned -c "select dirty from project where name='$SRCDATA_PROJECT_NAME';") || -1;
+        w=$(psql $PGCONN_STRING_POSTGRES/$KYRIX_DB -X -P t -P format=unaligned -c "select dirty from project where name='$SRCDATA_PROJECT_NAME';") || -1;
         if [ "x$w" = "x0" ]; then break; fi;
         spin "waiting for kyrix re-index, currently dirty=$w"
     done
-    echo "yes" > /kyrix-started
+    echo "yes" > ~/Kyrix/kyrix-started
 
     if [ "x$DBTYPE" = "xpsql" ]; then
         KYRIX_IP=$(curl -s ifconfig.me)
