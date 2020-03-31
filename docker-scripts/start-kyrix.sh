@@ -4,12 +4,12 @@ echo "no" > ~/kyrix-started
 
 source ~/Kyrix/docker-scripts/spinner.sh
 
-SRCDATA_PROJECT_NAME=${SRCDATA_PROJECT_NAME:-dots_skewed_80_20}
-SRCDATA_DB=${SRCDATA_DB:-dots_skewed_80_20}
-SRCDATA_DB_TEST_TABLE=${SRCDATA_DB_TEST_TABLE:-dots_skewed_80_20}  # source table (one of...) checked to avoid duplicate loads
+SRCDATA_PROJECT_NAME=${SRCDATA_PROJECT_NAME:-dots_uniform}
+SRCDATA_DB=${SRCDATA_DB:-dots_uniform}
+SRCDATA_DB_TEST_TABLE=${SRCDATA_DB_TEST_TABLE:-dots_uniform}  # source table (one of...) checked to avoid duplicate loads
 SRCDATA_DB_TEST_TABLE_MIN_RECS=${SRCDATA_DB_TEST_TABLE_MIN_RECS:-500000}  # rarely needs changing: min records to find in test table
-SRCDATA_DB_LOAD_CMD=${SRCDATA_DB_LOAD_CMD:-~/Kyrix/compiler/examples/dots-skewed-80-20/reload-dots-skewed-80-20.sh}
-KYRIX_DB_INDEX_CMD=${KYRIX_DB_INDEX_CMD:-~/Kyrix/compiler/examples/dots-skewed-80-20/reindex-dots-skewed-80-20.sh}
+SRCDATA_DB_LOAD_CMD=${SRCDATA_DB_LOAD_CMD:-~/Kyrix/compiler/examples/dots-uniform/reload-dots-uniform.sh}
+KYRIX_DB_INDEX_CMD=${KYRIX_DB_INDEX_CMD:-~/Kyrix/compiler/examples/dots-uniform/reindex-dots-uniform.sh}
 KYRIX_DB_INDEX_FORCE=${KYRIX_DB_INDEX_FORCE:-0}
 KYRIX_DB_RELOAD_FORCE=${KYRIX_DB_RELOAD_FORCE:-0}
 START_APP=1
@@ -36,7 +36,7 @@ echo $PGHOST >> ~/Kyrix/config.txt
 echo "postgres" >> ~/Kyrix/config.txt
 echo "" >> ~/Kyrix/config.txt
 echo $KYRIX_DB >> ~/Kyrix/config.txt
-echo "/Users/petergriggs/Kyrix/compiler" >> ~/Kyrix/config.txt
+echo "/home/petergriggs/Kyrix/compiler" >> ~/Kyrix/config.txt
 
 IGNORE_RX="(NOTICE|HINT|already exists)"
 echo "*** setting up postgres roles/databases on master..."
