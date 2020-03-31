@@ -163,7 +163,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                 System.out.println("partitionId is too high, is: " + partitionId + " before correcting");
                 partitionId = NUM_PARTITIONS - 1;
             }
-            preparedStmt.setInt(transformedRow.size() + 8, partitionId);
+            preparedStmt.setInt(transformedRow.size() + 9, partitionId);
 
             
             preparedStmt.addBatch();
@@ -184,7 +184,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
 
         // sort according to ascending zorder
         makeZOrderTable(bboxTableName, trans, c, layerId);
-        
+
         /*
         sql: create index idx_tbl_box_1 on tbl_box using gist (geom);
         */
