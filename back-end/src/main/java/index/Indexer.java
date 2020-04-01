@@ -266,4 +266,19 @@ public abstract class Indexer implements Serializable {
 
         return polygonText;
     }
+
+    protected static String getBoxText(double minx, double miny, double maxx, double maxy) {
+        String boxText = "Box(Point(";
+        boxText +=
+            String.valueOf(minx)
+                    + ", "
+                    + String.valueOf(miny)
+                    + "), ("
+                    + String.valueOf(maxx)
+                    + ", "
+                    + String.valueOf(maxy)
+                    + ")";
+        boxText += ")";
+        return boxText;
+    }
 }
