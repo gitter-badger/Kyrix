@@ -236,7 +236,7 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
                 // insert the last one
                 if (curGridX != -1) {
                     insPrepStmt.setString(1, curBlob.toString());
-                    insPrepStmt.setString(2, getBoxText(curMinX, curMinY, curMaxX, curMaxY));
+                    insPrepStmt.setString(2, getBoxObjectText(curMinX, curMinY, curMaxX, curMaxY));
                     insPrepStmt.addBatch();
                     insCount++;
                     if (insCount % updBatchSize == 0) insPrepStmt.executeBatch();
