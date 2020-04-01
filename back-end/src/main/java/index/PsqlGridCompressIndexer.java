@@ -236,7 +236,7 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
                 // insert the last one
                 if (curGridX != -1) {
                     insPrepStmt.setString(1, curBlob.toString());
-                    insPrepStmt.setString(2, getBoxObjectText(curMinX, curMinY, curMaxX, curMaxY));
+                    insPrepStmt.setString(2, getBoxText(curMinX, curMinY, curMaxX, curMaxY));
                     insPrepStmt.addBatch();
                     insCount++;
                     if (insCount % updBatchSize == 0) insPrepStmt.executeBatch();
@@ -325,6 +325,28 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
         }
 
         return ret;
+    }
+
+    private static String getBoxText(
+            double minx, double miny, double maxx, double maxy) {
+
+        String boxText = "(";
+        /*
+        sql: box(point(minx, miny), point(maxx, maxy))
+        */
+        boxText +=
+                "("
+                        + String.valueOf(minx)
+                        + ", "
+                        + String.valueOf(miny)
+                        + "), "
+                        + "("
+                        + String.valueOf(maxx)
+                        + ", "
+                        + String.valueOf(maxy)
+                        + "))";
+
+        return boxText;
     }
 
     @Override
