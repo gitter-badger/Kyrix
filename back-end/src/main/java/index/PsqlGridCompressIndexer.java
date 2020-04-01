@@ -40,10 +40,10 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
         Statement bboxStmt = DbConnector.getStmtByDbName(Config.databaseName);
 
         // create postgis extension if not existed
-        String psql = "CREATE EXTENSION if not exists postgis;";
-        bboxStmt.executeUpdate(psql);
-        psql = "CREATE EXTENSION if not exists postgis_topology;";
-        bboxStmt.executeUpdate(psql);
+        // String psql = "CREATE EXTENSION if not exists postgis;";
+        // bboxStmt.executeUpdate(psql);
+        // psql = "CREATE EXTENSION if not exists postgis_topology;";
+        // bboxStmt.executeUpdate(psql);
 
         // set up query iterator
         Layer l = c.getLayers().get(layerId);
@@ -209,11 +209,11 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
         sql =
                 "create table "
                         + groupedTableName
-                        + " (compressed_blob text, geom geometry(polygon));";
+                        + " (compressed_blob text, geom box);";
         bboxStmt.executeUpdate(sql);
 
         // prepared statements
-        insertSql = "insert into " + groupedTableName + " values (?, ST_GeomFromText(?));";
+        insertSql = "insert into " + groupedTableName + " values (?, ?::box);";
         insPrepStmt = DbConnector.getPreparedStatement(Config.databaseName, insertSql);
 
         // info of current group
@@ -287,6 +287,17 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
             Canvas c, int layerId, String regionWKT, String predicate, Box newBox, Box oldBox)
             throws Exception {
 
+        double minx = newBox.getMinx(), miny = newBox.getMiny();
+        double maxx = newBox.getMaxx(), maxy = newBox.getMaxy();
+        String boxNew =
+                "box (" + "point(" + minx + ", " + miny + "), " + "point(" + maxx
+                        + ", " + maxy + "))";
+
+        String boxOld = 
+                "box (" + "point(" + oldBox.getMinx() + ", " + oldBox.getMiny() + "), " 
+                    + "point(" + oldBox.getMaxx()
+                    + ", " + oldBox.getMaxy() + "))";
+
         // construct range query
         String sql =
                 "select compressed_blob from bbox_"
@@ -295,7 +306,9 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
                         + c.getId()
                         + "layer"
                         + layerId
-                        + " where ST_Intersects(st_GeomFromText";
+                        + " where geom && ";
+        sql += boxNew;
+        sql += " and not (geom && " + boxOld + ")";
         sql += "('" + regionWKT + "'), geom)";
         if (predicate.length() > 0) sql += " and " + predicate + ";";
         System.out.println(sql);
