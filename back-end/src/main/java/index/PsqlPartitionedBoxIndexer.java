@@ -18,7 +18,7 @@ import project.Transform;
 public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
 
     private static PsqlPartitionedBoxIndexer instance = null;
-    private static final int NUM_PARTITIONS = 100;
+    private static final int NUM_PARTITIONS = 50;
 
     private PsqlPartitionedBoxIndexer() {}
 
@@ -47,8 +47,8 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
         String bboxTableName = "bbox_" + Main.getProject().getName();
 
         // create extension if it doesn't exist
-        String extSql = "create extension if not exists btree_gist;";
-        bboxStmt.executeUpdate(extSql);
+        // String extSql = "create extension if not exists btree_gist;";
+        // bboxStmt.executeUpdate(extSql);
 
         // drop table if exists -- NO DON'T WANT TO DROP TABLE NOW ONE BIG TABLE
         // String sql = "drop table if exists " + bboxTableName + ";";
@@ -66,7 +66,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                     "cx double precision, cy double precision, " +
                     "minx double precision, miny double precision, " +
                     "maxx double precision, maxy double precision, " +
-                    "geom box, canvasid int8, partition_id int) " +
+                    "geom box, partition_id int) " +
                     "PARTITION BY LIST (partition_id);";
             System.out.println(sql);
             bboxStmt.executeUpdate(sql);
@@ -107,7 +107,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
         for (int i = 0; i < colNames.size() + 6; i++) {
             insertSql += "?, ";
         }
-        insertSql += "?::box, ?, ?);";
+        insertSql += "?::box, ?);";
         PreparedStatement preparedStmt =
                 DbConnector.getPreparedStatement(Config.databaseName, insertSql);
         while (rs.next()) {
@@ -146,7 +146,6 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
             preparedStmt.setString(
                     transformedRow.size() + 7,  getBoxText(minx, miny, maxx, maxy));
 
-            preparedStmt.setInt(transformedRow.size() + 8, getCanvasNum(c));
 
             // calculate partition id -- partition width into equal sized buckets
             // each partition will include all z values in that width, so it is more 
@@ -194,7 +193,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                     + bboxTableName
                     + " on "
                     + bboxTableName
-                    + " using gist (geom, canvasid);";
+                    + " using gist (geom);";
             System.out.println(sql);
             long st = System.currentTimeMillis();
             bboxStmt.executeUpdate(sql);
@@ -218,7 +217,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                                 + bboxTableName
                                 + "_"
                                 + i
-                                + "_geom_canvasid_idx;";
+                                + "_geom_idx;";
                 System.out.println(sql);
                 long stt = System.currentTimeMillis();
                 bboxStmt.executeUpdate(sql);
@@ -276,7 +275,7 @@ public class PsqlPartitionedBoxIndexer extends BoundingBoxIndexer {
                     + i
                     + " where geom && ";
             sql += boxNew;
-            sql += " and not (geom && " + boxOld + ") and canvasid = " + canvasNum;
+            sql += " and not (geom && " + boxOld + ")";
             if (predicate.length() > 0) sql += " and " + predicate + ";";
             else sql += ";";
             System.out.println(sql);
