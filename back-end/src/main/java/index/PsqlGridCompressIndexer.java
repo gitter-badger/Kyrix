@@ -309,8 +309,8 @@ public class PsqlGridCompressIndexer extends BoundingBoxIndexer {
                         + " where geom && ";
         sql += boxNew;
         sql += " and not (geom && " + boxOld + ")";
-        sql += "('" + regionWKT + "'), geom)";
         if (predicate.length() > 0) sql += " and " + predicate + ";";
+        else sql += ";";
         System.out.println(sql);
 
         // get compressed tuples
