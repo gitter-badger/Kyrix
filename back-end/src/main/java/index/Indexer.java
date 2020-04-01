@@ -273,7 +273,7 @@ public abstract class Indexer implements Serializable {
             String.valueOf(minx)
                     + ", "
                     + String.valueOf(miny)
-                    + "), ("
+                    + "), Point("
                     + String.valueOf(maxx)
                     + ", "
                     + String.valueOf(maxy)
