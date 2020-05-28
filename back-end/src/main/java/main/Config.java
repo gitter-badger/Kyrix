@@ -53,9 +53,10 @@ public class Config {
         MYSQL_SPATIAL_INDEX,
         PSQL_PARTITIONED_BOX_INDEX,
         PSQL_PARTITIONED_QUAD_INDEX,
+        PSQL_GRID_COMPRESSOR_INDEX,
     };
     
-    public static IndexingScheme indexingScheme = IndexingScheme.PSQL_PARTITIONED_QUAD_INDEX;
+    public static IndexingScheme indexingScheme = IndexingScheme.PSQL_GRID_COMPRESSOR_INDEX;
 
     // underlying database
     public enum Database {
